@@ -1,0 +1,249 @@
+<script type="text/javascript">
+        var gk_isXlsx = false;
+        var gk_xlsxFileLookup = {};
+        var gk_fileData = {};
+        function filledCell(cell) {
+          return cell !== '' && cell != null;
+        }
+        function loadFileData(filename) {
+        if (gk_isXlsx && gk_xlsxFileLookup[filename]) {
+            try {
+                var workbook = XLSX.read(gk_fileData[filename], { type: 'base64' });
+                var firstSheetName = workbook.SheetNames[0];
+                var worksheet = workbook.Sheets[firstSheetName];
+
+                // Convert sheet to JSON to filter blank rows
+                var jsonData = XLSX.utils.sheet_to_json(worksheet, { header: 1, blankrows: false, defval: '' });
+                // Filter out blank rows (rows where all cells are empty, null, or undefined)
+                var filteredData = jsonData.filter(row => row.some(filledCell));
+
+                // Heuristic to find the header row by ignoring rows with fewer filled cells than the next row
+                var headerRowIndex = filteredData.findIndex((row, index) =>
+                  row.filter(filledCell).length >= filteredData[index + 1]?.filter(filledCell).length
+                );
+                // Fallback
+                if (headerRowIndex === -1 || headerRowIndex > 25) {
+                  headerRowIndex = 0;
+                }
+
+                // Convert filtered JSON back to CSV
+                var csv = XLSX.utils.aoa_to_sheet(filteredData.slice(headerRowIndex)); // Create a new sheet from filtered array of arrays
+                csv = XLSX.utils.sheet_to_csv(csv, { header: 1 });
+                return csv;
+            } catch (e) {
+                console.error(e);
+                return "";
+            }
+        }
+        return gk_fileData[filename] || "";
+        }
+        </script><!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Gym Design / Build Project Tracker</title>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js"></script>
+  <style>
+    body { font-family: Arial, sans-serif; margin: 20px; }
+    #chartContainer { max-width: 800px; margin: 20px auto; }
+    #updateForm { margin: 20px; }
+    table { border-collapse: collapse; width: 100%; max-width: 800px; margin: 20px auto; }
+    th, td { border: 1px solid #ddd; padding: 8px; text-align: left; }
+    th { background-color: #f2f2f2; }
+    button { padding: 10px; margin: 5px; }
+  </style>
+</head>
+<body>
+  <h1>Gym Design / Build Project Tracker</h1>
+  <canvas id="progressChart" width="800" height="600"></canvas>
+  <h2>Update Project</h2>
+  <div id="updateForm">
+    <label for="projectSelect">Project:</label>
+    <select id="projectSelect">
+      <option value="0">Lever Arm Leg Press</option>
+      <option value="1">Barbell Anchor</option>
+      <option value="2">3 x 3 Wall Mount</option>
+      <option value="3">3 x 3 Angle Wall Mount</option>
+      <option value="4">DIY Dock Model</option>
+      <option value="5">Voltra Quick Dock</option>
+      <option value="6">3 x 3 Swivel Mount</option>
+      <option value="7">3 x 3 Curl Bar Mount</option>
+      <option value="8">Voltra Double Sided Low Mount</option>
+      <option value="9">Voltra Front Low Mount</option>
+      <option value="10">USB Hub Mount</option>
+      <option value="11">3 x 3 Drink Holder</option>
+      <option value="12">Rollers for RX3 Tornado Arms</option>
+      <option value="13">Liner for Bolt Fitness Preacher Curl</option>
+      <option value="14">3 x 3 Swivel Pulley</option>
+      <option value="15">3 x 3 Double Articulating Back Pad</option>
+    </select>
+    <br>
+    <label for="stageSelect">Current Stage:</label>
+    <select id="stageSelect">
+      <option value="0">Conceptual Design</option>
+      <option value="1">Rough Sketch</option>
+      <option value="2">Design</option>
+      <option value="3">Detail Design</option>
+      <option value="4">Review</option>
+      <option value="5">Prototyping</option>
+      <option value="6">Procurement</option>
+      <option value="7">Fabrication</option>
+      <option value="8">Assembly</option>
+      <option value="9">Testing</option>
+      <option value="10">Final Review</option>
+    </select>
+    <br>
+    <label for="progressInput">Progress in Stage (%):</label>
+    <input type="number" id="progressInput" min="0" max="100" value="0">
+    <br>
+    <label for="assigneeSelect">Assignee:</label>
+    <select id="assigneeSelect">
+      <option value="Wesley Chappell">Wesley Chappell</option>
+      <option value="Robert Grimes">Robert Grimes</option>
+    </select>
+    <br>
+    <label for="notesInput">Notes:</label>
+    <input type="text" id="notesInput" placeholder="e.g., Awaiting feedback on sketches">
+    <br>
+    <button onclick="updateProject()">Update Project</button>
+    <button onclick="exportChart()">Export Chart as PNG</button>
+  </div>
+  <h2>Project Status</h2>
+  <table id="statusTable">
+    <thead>
+      <tr>
+        <th>Project</th>
+        <th>Current Stage</th>
+        <th>Progress in Stage (%)</th>
+        <th>Overall Progress (%)</th>
+        <th>Assignee</th>
+        <th>Last Update</th>
+        <th>Notes</th>
+      </tr>
+    </thead>
+    <tbody id="tableBody"></tbody>
+  </table>
+
+  <script>
+    // Project data
+    const projects = [
+      { name: "Lever Arm Leg Press", stage: 0, progress: 0, assignee: "Robert Grimes", lastUpdate: "Aug 17, 2025", notes: "" },
+      { name: "Barbell Anchor", stage: 0, progress: 0, assignee: "Wesley Chappell", lastUpdate: "Aug 17, 2025", notes: "" },
+      { name: "3 x 3 Wall Mount", stage: 0, progress: 0, assignee: "Wesley Chappell", lastUpdate: "Aug 17, 2025", notes: "" },
+      { name: "3 x 3 Angle Wall Mount", stage: 0, progress: 0, assignee: "Wesley Chappell", lastUpdate: "Aug 17, 2025", notes: "" },
+      { name: "DIY Dock Model", stage: 0, progress: 0, assignee: "Wesley Chappell", lastUpdate: "Aug 17, 2025", notes: "" },
+      { name: "Voltra Quick Dock", stage: 0, progress: 0, assignee: "Wesley Chappell", lastUpdate: "Aug 17, 2025", notes: "" },
+      { name: "3 x 3 Swivel Mount", stage: 0, progress: 0, assignee: "Wesley Chappell", lastUpdate: "Aug 17, 2025", notes: "" },
+      { name: "3 x 3 Curl Bar Mount", stage: 0, progress: 0, assignee: "Wesley Chappell", lastUpdate: "Aug 17, 2025", notes: "" },
+      { name: "Voltra Double Sided Low Mount", stage: 0, progress: 0, assignee: "Wesley Chappell", lastUpdate: "Aug 17, 2025", notes: "" },
+      { name: "Voltra Front Low Mount", stage: 0, progress: 0, assignee: "Wesley Chappell", lastUpdate: "Aug 17, 2025", notes: "" },
+      { name: "USB Hub Mount", stage: 0, progress: 0, assignee: "Wesley Chappell", lastUpdate: "Aug 17, 2025", notes: "" },
+      { name: "3 x 3 Drink Holder", stage: 0, progress: 0, assignee: "Wesley Chappell", lastUpdate: "Aug 17, 2025", notes: "" },
+      { name: "Rollers for RX3 Tornado Arms", stage: 0, progress: 0, assignee: "Wesley Chappell", lastUpdate: "Aug 17, 2025", notes: "" },
+      { name: "Liner for Bolt Fitness Preacher Curl", stage: 0, progress: 0, assignee: "Wesley Chappell", lastUpdate: "Aug 17, 2025", notes: "" },
+      { name: "3 x 3 Swivel Pulley", stage: 0, progress: 0, assignee: "Wesley Chappell", lastUpdate: "Aug 17, 2025", notes: "" },
+      { name: "3 x 3 Double Articulating Back Pad", stage: 0, progress: 0, assignee: "Wesley Chappell", lastUpdate: "Aug 17, 2025", notes: "" }
+    ];
+
+    const stages = ["Conceptual Design", "Rough Sketch", "Design", "Detail Design", "Review", "Prototyping", "Procurement", "Fabrication", "Assembly", "Testing", "Final Review"];
+
+    // Initialize Chart.js
+    const ctx = document.getElementById('progressChart').getContext('2d');
+    const chart = new Chart(ctx, {
+      type: 'bar',
+      data: {
+        labels: projects.map(p => p.name),
+        datasets: [
+          {
+            label: 'Progress',
+            data: projects.map(p => ((p.stage + (p.progress / 100)) / 11 * 100)),
+            backgroundColor: '#4CAF50',
+            barThickness: 20
+          },
+          {
+            label: 'Remaining',
+            data: projects.map(p => 100 - ((p.stage + (p.progress / 100)) / 11 * 100)),
+            backgroundColor: '#B0BEC5',
+            barThickness: 20
+          }
+        ]
+      },
+      options: {
+        indexAxis: 'y',
+        scales: {
+          x: {
+            stacked: true,
+            title: { display: true, text: 'Overall Progress (%)' }
+          },
+          y: {
+            stacked: true,
+            title: { display: true, text: 'Projects' }
+          }
+        }
+      }
+    });
+
+    // Update table
+    function updateTable() {
+      const tableBody = document.getElementById('tableBody');
+      tableBody.innerHTML = '';
+      projects.forEach(project => {
+        const row = document.createElement('tr');
+        row.innerHTML = `
+          <td>${project.name}</td>
+          <td>${stages[project.stage]}</td>
+          <td>${project.progress}</td>
+          <td>${((project.stage + (project.progress / 100)) / 11 * 100).toFixed(2)}</td>
+          <td>${project.assignee}</td>
+          <td>${project.lastUpdate}</td>
+          <td>${project.notes}</td>
+        `;
+        tableBody.appendChild(row);
+      });
+    }
+
+    // Update project data and chart
+    function updateProject() {
+      const projectIndex = document.getElementById('projectSelect').value;
+      const stage = parseInt(document.getElementById('stageSelect').value);
+      const progress = parseInt(document.getElementById('progressInput').value);
+      const assignee = document.getElementById('assigneeSelect').value;
+      const notes = document.getElementById('notesInput').value;
+      const currentDate = new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+
+      // Validate: Ensure previous stages are complete
+      if (stage > 0 && projects[projectIndex].stage < stage - 1) {
+        alert('Cannot advance to this stage; previous stages must be completed.');
+        return;
+      }
+
+      // Update project data
+      projects[projectIndex].stage = stage;
+      projects[projectIndex].progress = progress;
+      projects[projectIndex].assignee = assignee;
+      projects[projectIndex].lastUpdate = currentDate;
+      projects[projectIndex].notes = notes;
+
+      // Update chart
+      chart.data.datasets[0].data = projects.map(p => ((p.stage + (p.progress / 100)) / 11 * 100));
+      chart.data.datasets[1].data = projects.map(p => 100 - ((p.stage + (p.progress / 100)) / 11 * 100));
+      chart.update();
+
+      // Update table
+      updateTable();
+    }
+
+    // Export chart as PNG
+    function exportChart() {
+      const link = document.createElement('a');
+      link.href = chart.toBase64Image();
+      link.download = 'Gym_Design_Build_Progress_Chart.png';
+      link.click();
+    }
+
+    // Initial table render
+    updateTable();
+  </script>
+</body>
+</html>
